@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+# coding=utf-8
 """ Conditional text generation with the auto-regressive models of the library (GPT/GPT-2/CTRL/Transformer-XL/XLNet)
 """
 import os
@@ -29,7 +31,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-MAX_LENGTH = int(10000)  
+MAX_LENGTH = int(10000) 
 
 MODEL_CLASSES = {
     "gpt2": (GPT2LMHeadModel, GPT2Tokenizer),
@@ -51,19 +53,23 @@ man is chased outside and beaten. Twenty years later, Rasputin sees a vision of
 the Virgin Mary, prompting him to become a priest. Rasputin quickly becomes famous,
 with people, even a bishop, begging for his blessing. <eod> </s> <eos>"""
 
+
 def set_seed(args):
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
     if args.n_gpu > 0:
         torch.cuda.manual_seed_all(args.seed)
 
+
 def prepare_ctrl_input(args, _, tokenizer, prompt_text):
     if args.temperature > 0.7:
         logger.info("CTRL typically works better with lower temperatures (and lower top_k).")
+
     encoded_prompt = tokenizer.encode(prompt_text, add_special_tokens=False)
     if not any(encoded_prompt[0] == x for x in tokenizer.control_codes.values()):
         logger.info("WARNING! You are not starting your generation from a control code so you won't get good results")
     return prompt_text
+
 
 def prepare_xlm_input(args, model, tokenizer, prompt_text):
     use_lang_emb = hasattr(model.config, "use_lang_emb") and model.config.use_lang_emb
@@ -75,16 +81,21 @@ def prepare_xlm_input(args, model, tokenizer, prompt_text):
             language = None
             while language not in available_languages:
                 language = input("Using XLM. Select language in " + str(list(available_languages)) + " >>> ")
+
         model.config.lang_id = model.config.lang2id[language]
+
     return prompt_text
+
 
 def prepare_xlnet_input(args, _, tokenizer, prompt_text):
     prompt_text = (args.padding_text if args.padding_text else PADDING_TEXT) + prompt_text
     return prompt_text
 
+
 def prepare_transfoxl_input(args, _, tokenizer, prompt_text):
     prompt_text = (args.padding_text if args.padding_text else PADDING_TEXT) + prompt_text
     return prompt_text
+
 
 PREPROCESSING_FUNCTIONS = {
     "ctrl": prepare_ctrl_input,
@@ -92,6 +103,7 @@ PREPROCESSING_FUNCTIONS = {
     "xlnet": prepare_xlnet_input,
     "transfo-xl": prepare_transfoxl_input,
 }
+
 
 def adjust_length_to_model(length, max_sequence_length):
     if length < 0 and max_sequence_length > 0:
@@ -101,6 +113,8 @@ def adjust_length_to_model(length, max_sequence_length):
     elif length < 0:
         length = MAX_LENGTH  
     return length
+
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
@@ -143,27 +157,39 @@ if torch.cuda.is_available():
     print('CUDA IS AVAILABLE')
 args.device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
 args.n_gpu = 0 if args.no_cuda else torch.cuda.device_count()
+
 set_seed(args)
+
+
 try:
     args.model_type = args.model_type.lower()
     model_class, tokenizer_class = MODEL_CLASSES[args.model_type]
 except KeyError:
     raise KeyError("the model {} you specified is not supported. You are welcome to add it and open a PR :)")
+
 tokenizer = tokenizer_class.from_pretrained(args.model_name_or_path)
 model = model_class.from_pretrained(args.model_name_or_path)
 model.to(args.device)
+
 args.length = adjust_length_to_model(args.length, max_sequence_length=model.config.max_position_embeddings)
 logger.info(args)
 generated_sequences = []
+
 prompt_text = 'Вася: "Привет" Лилия: "'
+
 masphrases=[]
 
 
+#--------------------------------------------------------------------------
 
-#------------- Функция генерации ответа (без учёта предыдущих фраз)
 
-def saygpt(vhod):
-    vhod='Вася: "'+vhod+'" '
+def saygpt(u,l,vhod):
+    deltext2='~'
+    if(u!=None and l!=None):
+        vhod='Вася: "'+u+'" '+'Лилия: "'+l[:300]+'" '+'Вася: "'+vhod+'" '
+        deltext2='Вася: "'+u+'" '+'Лилия: "'+l[:300]+'" '
+    else:
+        vhod='Вася: "'+vhod+'" '
     masphrases.append(vhod)
     prompt_text=vhod+'Лилия: "'
     deltext=prompt_text
@@ -197,17 +223,18 @@ def saygpt(vhod):
             prompt_text + text[len(tokenizer.decode(encoded_prompt[0], clean_up_tokenization_spaces=True)) :]
         )
         generated_sequences.append(total_sequence)
-    otvet= total_sequence.replace(deltext,'').split('"')[0]
+    otvet= total_sequence.replace(deltext,'').replace(deltext2,'').split('"')[0]
     prompt_text = ""
     return(otvet)
 
-#------------ Тестирование диалога
-
-vh=''
-while vh!="stop":
-    if(vh!='stop'):
-        vh=input('Введите фразу: ')
-        ot=saygpt(vh)
-        print(ot)
-
-
+u=None
+l=None
+sss=''
+while sss!='stop':
+    sss=input('Введите фразу: ')
+    otv=saygpt(u,l,sss)
+    print(otv)
+    u=sss
+    l=otv
+    
+    
